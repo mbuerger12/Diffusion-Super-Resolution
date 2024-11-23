@@ -2,7 +2,7 @@ import os
 import argparse
 from collections import defaultdict
 import time
-
+import torchvision.transforms as transforms
 import numpy as np
 import torch
 from torch import is_tensor, optim
@@ -10,13 +10,14 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from torchvision.transforms import Normalize
 from tqdm import tqdm
+import sys
 
 from arguments import train_parser
 from model import GADBase
 from data import MiddleburyDataset, NYUv2Dataset, DIMLDataset
 from losses import get_loss
 from utils import new_log, to_cuda, seed_all
-
+from datasets import MagicBathyNet
 # import nvidia_smi
 # nvidia_smi.nvmlInit()
 
@@ -89,6 +90,13 @@ class Trainer:
 
                 self.epoch += 1
 
+    def prepare_magic_bathy(self, sample):
+            return {
+            'guide': sample[3].unsqueeze(0),
+            'source': sample[2].unsqueeze(0),
+            'mask_lr': (sample[2] != 0).any(dim=0).float(),
+            'y_bicubic': torch.nn.functional.interpolate(sample[2].unsqueeze(0), scale_factor=40, mode='bicubic', align_corners=True)
+            }
     def train_epoch(self, tnr=None):
         self.train_stats = defaultdict(float)
 
@@ -99,9 +107,10 @@ class Trainer:
         # self.train_stats["gpu_used"] = info.used
 
 
-        with tqdm(self.dataloaders['train'], leave=False) as inner_tnr:
+        with tqdm(self.dataloaders.datasets['train'], leave=False) as inner_tnr:
             inner_tnr.set_postfix(training_loss=np.nan)
             for i, sample in enumerate(inner_tnr):
+                #sample = self.prepare_magic_bathy(sample)
                 sample = to_cuda(sample)
 
                 if not args.no_opt:
@@ -204,11 +213,19 @@ class Trainer:
         elif args.dataset == 'NYUv2':
             # Important, do not zero-center the depth, DADA needs positive depths
             depth_transform = Normalize([0.0], [1386.05])
-            datasets = {phase: NYUv2Dataset(os.path.join(args.data_dir, 'NYU Depth v2'), **data_args, split=phase,
+            datasets = {phase: NYUv2Dataset(os.path.join(args.data_dir, 'NYUv2'), **data_args, split=phase,
                         depth_transform=depth_transform) for phase in phases}
-        else:
-            raise NotImplementedError(f'Dataset {args.dataset}')
 
+        elif args.dataset =='MagicBathy':
+                path_to_images = os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425', 'agia_napa', 'img','s2')
+                path_to_images = [os.path.join(path_to_images, x) for x in os.listdir(path_to_images)]
+                path_to_labels = os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425', 'agia_napa', 'img','aerial')
+                path_to_labels = [os.path.join(path_to_labels, x) for x in os.listdir(path_to_labels)]
+                transform = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                ])
+                return MagicBathyNet.MagicBathyNetDataLoader(os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425'), batch_size=args.batch_size, num_workers=args.num_workers,locations=['agia_napa', 'puck_lagoon'], transform=transform, bathymetry=True)
         return {phase: DataLoader(datasets[phase], batch_size=args.batch_size, num_workers=args.num_workers,
                 shuffle=True, drop_last=False) for phase in phases}
 
@@ -244,9 +261,12 @@ class Trainer:
 
 
 if __name__ == '__main__':
+    print(torch.cuda.is_available())
+    print(torch.version.cuda)
+    torch.cuda.empty_cache()  # Clear unused memory in PyTorch's cache
     args = train_parser.parse_args()
     print(train_parser.format_values())
-    print("hallo welt")
+
     if args.wandb:
         import wandb
 
