@@ -246,7 +246,7 @@ class Trainer:
 if __name__ == '__main__':
     args = train_parser.parse_args()
     print(train_parser.format_values())
-
+    print("hallo welt")
     if args.wandb:
         import wandb
 
