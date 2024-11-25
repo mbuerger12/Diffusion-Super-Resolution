@@ -72,13 +72,17 @@ class MagicBathyNet(Dataset):
             label = self.target_trans(label)
         else:
             label = self.transform(label)
-
+        y = torch.nn.functional.interpolate(label.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic',
+                                        align_corners=True)
+        mask_hr = (y.sum(dim=1) != 0).to(torch.float32)
+        mask_hr = mask_hr.unsqueeze(1).expand(-1, y.size(1), -1, -1)
         return {
-            'guide': bath.to(torch.float32).unsqueeze(0),
-            'source': img.to(torch.float32).unsqueeze(0),
-            'label': label.to(torch.float32),
+            'guide': torch.nn.functional.interpolate(bath.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
+            'source': torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
+            'y': y,
             'mask_lr': 0,
-            'y_bicubic': torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), scale_factor=40, mode='bicubic', align_corners=True)
+            'y_bicubic': torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
+            'mask_hr': mask_hr
         }
 
         #return img_path, label_path, img.to(torch.float32), label.to(torch.float32)

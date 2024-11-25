@@ -138,7 +138,7 @@ class Trainer:
 
                 self.iter += 1
 
-                if (i + 1) % min(self.args.logstep_train, len(self.dataloaders['train'])) == 0:
+                if (i + 1) % min(self.args.logstep_train, len(self.dataloaders.datasets['train'])) == 0:
                     self.train_stats = {k: v / self.args.logstep_train for k, v in self.train_stats.items()}
 
                     inner_tnr.set_postfix(training_loss=self.train_stats['optimization_loss'])
