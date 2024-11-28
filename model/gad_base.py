@@ -66,8 +66,8 @@ class GADBase(nn.Module):
     def diffuse(self, img, guide, source, mask_inv,
         l=0.24, K=0.01, verbose=False, eps=1e-8, train=False):
 
-        _,_,h,w = guide.shape
-        _,_,sh,sw = source.shape
+        _, _,h,w = guide.shape
+        _, _,sh,sw = source.shape
 
         # Define Downsampling operations that depend on the input size
         downsample = nn.AdaptiveAvgPool2d((sh, sw))

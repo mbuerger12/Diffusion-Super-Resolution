@@ -1,4 +1,4 @@
-name: DADA-SR-1
+name: DADA-SR-2
 channels:
   - pytorch
   - conda-forge
@@ -15,10 +15,3 @@ dependencies:
   - pip:
     - setuptools==59.5.0
     - configargparse
-    - segmentation-models-pytorch==0.2
-    - tqdm
-    - matplotlib==3.9.2
-    - tifffile
-    - numpy
-    - scikit-learn==1.5.1
-    - osgeo

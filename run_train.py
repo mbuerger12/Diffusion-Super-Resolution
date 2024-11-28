@@ -225,7 +225,7 @@ class Trainer:
                     transforms.ToTensor(),
                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                 ])
-                return MagicBathyNet.MagicBathyNetDataLoader(os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425'), batch_size=args.batch_size, num_workers=args.num_workers,locations=['agia_napa', 'puck_lagoon'], transform=transform, bathymetry=True)
+                return MagicBathyNet.MagicBathyNetDataLoader(os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425'), batch_size=args.batch_size, num_workers=args.num_workers,locations=['agia_napa'], bathymetry=True)
         return {phase: DataLoader(datasets[phase], batch_size=args.batch_size, num_workers=args.num_workers,
                 shuffle=True, drop_last=False) for phase in phases}
 

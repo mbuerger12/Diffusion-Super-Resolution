@@ -42,7 +42,7 @@ class MagicBathyNet(Dataset):
         img = tifffile.imread(img_path).astype(np.float32)
         label = tifffile.imread(label_path).astype(np.float32)
         bath = tifffile.imread(bath_path).astype(np.float32)
-        bath = torch.tensor(bath).unsqueeze(0)
+        #bath = torch.tensor(bath)
         if "agia_napa" in img_path:
             norm_param_s2 = self.norm_params["s2_an"]
             norm_param_spot6 = self.norm_params["spot6_an"]
@@ -71,17 +71,18 @@ class MagicBathyNet(Dataset):
         if self.target_trans:
             label = self.target_trans(label)
         else:
-            label = self.transform(label)
-        y = torch.nn.functional.interpolate(label.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic',
-                                        align_corners=True)
+            print("No target transform")
+            #label = self.transform(label)
+        y = torch.tensor(label).to(torch.float32).unsqueeze(0)
         mask_hr = (y.sum(dim=1) != 0).to(torch.float32)
         mask_hr = mask_hr.unsqueeze(1).expand(-1, y.size(1), -1, -1)
+        img = img.transpose(2, 0, 1)
         return {
-            'guide': torch.nn.functional.interpolate(bath.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
-            'source': torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
+            'guide': torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0),
+            'source': torch.tensor(img).to(torch.float32).unsqueeze(0),
             'y': y,
             'mask_lr': 0,
-            'y_bicubic': torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(192, 192), mode='bicubic', align_corners=True),
+            'y_bicubic': torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(720, 720), mode='bicubic', align_corners=True),
             'mask_hr': mask_hr
         }
 
