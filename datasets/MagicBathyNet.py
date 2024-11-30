@@ -73,6 +73,7 @@ class MagicBathyNet(Dataset):
         else:
             print("No target transform")
             #label = self.transform(label)
+        label = label.transpose(2, 0, 1)
         y = torch.tensor(label).to(torch.float32).unsqueeze(0)
         mask_hr = (y.sum(dim=1) != 0).to(torch.float32)
         mask_hr = mask_hr.unsqueeze(1).expand(-1, y.size(1), -1, -1)
@@ -82,7 +83,7 @@ class MagicBathyNet(Dataset):
             'source': torch.tensor(img).to(torch.float32).unsqueeze(0),
             'y': y,
             'mask_lr': 0,
-            'y_bicubic': torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(720, 720), mode='bicubic', align_corners=True),
+            'y_bicubic': torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True),
             'mask_hr': mask_hr
         }
 
@@ -179,8 +180,8 @@ class MagicBathyNetDataLoader:
         #     }
         # else:
         self.norm_params = {
-            "s2_an": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','agia_napa',"norm_param_s2_an.npy")),
-            "spot6_an": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','agia_napa',"norm_param_aerial.npy")),
+            "s2_an": np.load(os.path.join('.','datafolder','resized','agia_napa',"norm_param_s2_an.npy")),
+            "spot6_an": np.load(os.path.join('.','datafolder','resized','agia_napa',"norm_param_aerial_an.npy")),
             "s2_pl": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','puck_lagoon',"norm_param_s2_pl.npy")),
             "spot6_pl": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','puck_lagoon',"norm_param_aerial.npy")),
         }

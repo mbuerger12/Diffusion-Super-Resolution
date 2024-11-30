@@ -226,8 +226,23 @@ class Trainer:
                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                 ])
                 return MagicBathyNet.MagicBathyNetDataLoader(os.path.join('.','datafolder', 'MagicBathyNet_CV4RS_WiSe_2425'), batch_size=args.batch_size, num_workers=args.num_workers,locations=['agia_napa'], bathymetry=True)
+        elif args.dataset == 'resized':
+            path_to_images = os.path.join('.', 'datafolder', 'resized', 'agia_napa', 'img', 's2')
+            path_to_images = [os.path.join(path_to_images, x) for x in os.listdir(path_to_images)]
+            path_to_labels = os.path.join('.', 'datafolder', 'resized', 'agia_napa', 'img',
+                                          'aerial')
+            path_to_labels = [os.path.join(path_to_labels, x) for x in os.listdir(path_to_labels)]
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+            return MagicBathyNet.MagicBathyNetDataLoader(
+                os.path.join('.', 'datafolder', 'resized'), batch_size=args.batch_size,
+                num_workers=args.num_workers, locations=['agia_napa'], bathymetry=True)
+
         return {phase: DataLoader(datasets[phase], batch_size=args.batch_size, num_workers=args.num_workers,
                 shuffle=True, drop_last=False) for phase in phases}
+
 
     def save_model(self, prefix=''):
         if args.no_opt:
