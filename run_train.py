@@ -113,6 +113,10 @@ class Trainer:
                 #sample = self.prepare_magic_bathy(sample)
                 sample = to_cuda(sample)
 
+                valid_samples = (sample['y'].sum(dim=(1, 2, 3)) != 0)
+                if not valid_samples.any():
+                    continue
+
                 if not args.no_opt:
                     self.optimizer.zero_grad()
 
@@ -162,7 +166,7 @@ class Trainer:
         self.model.eval()
 
         with torch.no_grad():
-            for sample in tqdm(self.dataloaders['val'], leave=False):
+            for sample in tqdm(self.dataloaders.datasets['val'], leave=False):
                 sample = to_cuda(sample)
 
                 output = self.model(sample)
