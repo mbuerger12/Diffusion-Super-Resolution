@@ -17,6 +17,8 @@ def get_loss(output, sample):
         
 
 def mse_loss_func(pred, gt, mask):
+    [print(x) for x in zip()]
+    g = gt[mask == 1.]
     return F.mse_loss(pred[mask == 1.], gt[mask == 1.])
 
 

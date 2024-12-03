@@ -45,20 +45,26 @@ class MagicBathyNet(Dataset):
         #bath = torch.tensor(bath)
         if "agia_napa" in img_path:
             norm_param_s2 = self.norm_params["s2_an"]
-            norm_param_aerial = self.norm_params["spot6_an"]
+            norm_param_aerial = self.norm_params["aerial_an"]
             norm_param_depth = -30.443
         elif "puck_lagoon" in img_path:
             norm_param_s2 = self.norm_params["s2_pl"]
-            norm_param_spot6 = self.norm_params["spot6_pl"]
+            norm_param_spot6 = self.norm_params["aerial_pl"]
             norm_param_depth = -11.0
 
         img = (img - norm_param_s2[0]) / (norm_param_s2[1] - norm_param_s2[0])
         label = (label - norm_param_aerial[0]) / (norm_param_aerial[1] - norm_param_aerial[0])
-        bath *= norm_param_depth
+        bath = bath / norm_param_depth
 
+
+        img = img[..., [2, 1, 0]] if "agia_napa" in img_path else img
+        img = img.transpose(2, 0, 1)
+        img = torch.clamp(torch.tensor(img), 0, 1)
+        bath = torch.clamp(torch.tensor(bath), 0, 1)
+        print(f"imgmin {img.min()} imgmax {img.max()} label {label.min()} label {label.max()} bath {bath.min()} bath {bath.max()}")
 
         # Swap from BGR to RGB
-        img = img[..., [2, 1, 0]] if "agia_napa" in img_path else img
+
 
         if self.transform:
             img = self.transform(img)
@@ -70,14 +76,14 @@ class MagicBathyNet(Dataset):
             #label = self.transform(label)
         label = label.transpose(2, 0, 1)
         y = torch.tensor(label).to(torch.float32).unsqueeze(0)
-        mask_hr = (y.sum(dim=1) != 0).to(torch.float32)
-        mask_hr = mask_hr.unsqueeze(1).expand(-1, y.size(1), -1, -1)
-        img = img.transpose(2, 0, 1)
+        mask_hr = (y != 0).all(dim=0, keepdim=True)
+        mask_lr = (img != 0).all(dim=0, keepdim=True).unsqueeze(0)
+
         return {
             'guide': torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0),
             'source': torch.tensor(img).to(torch.float32).unsqueeze(0),
             'y': y,
-            'mask_lr': 0,
+            'mask_lr': mask_lr,
             'y_bicubic': torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True),
             'mask_hr': mask_hr
         }
@@ -176,9 +182,9 @@ class MagicBathyNetDataLoader:
         # else:
         self.norm_params = {
             "s2_an": np.load(os.path.join('.','datafolder','resized','agia_napa',"norm_param_s2_an.npy")),
-            "spot6_an": np.load(os.path.join('.','datafolder','resized','agia_napa',"norm_param_aerial_an.npy")),
+            "aerial_an": np.load(os.path.join('.','datafolder','resized','agia_napa',"norm_param_aerial_an.npy")),
             "s2_pl": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','puck_lagoon',"norm_param_s2_pl.npy")),
-            "spot6_pl": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','puck_lagoon',"norm_param_aerial.npy")),
+            "aerial_pl": np.load(os.path.join('.','datafolder','MagicBathyNet_CV4RS_WiSe_2425','puck_lagoon',"norm_param_aerial.npy")),
         }
 
 
