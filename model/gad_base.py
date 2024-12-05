@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
-INPUT_DIM = 4
+INPUT_DIM = 1
 FEATURE_DIM = 64
 
 class GADBase(nn.Module):
@@ -44,6 +44,7 @@ class GADBase(nn.Module):
         guide, source, mask_lr = sample['guide'], sample['source'], sample['mask_lr']
 
         # assert that all values are positive, otherwise shift depth map to positives
+        print(source.min())
         if source.min()<=deps:
             print("Warning: The forward function was called with negative depth values. Values were temporarly shifted. Consider using unnormalized depth values for stability.")
             source += deps
@@ -74,27 +75,25 @@ class GADBase(nn.Module):
         upsample = lambda x: F.interpolate(x, (h, w), mode='nearest')
 
         # Deep Learning version or RGB version to calucalte the coefficients
-        if self.feature_extractor is None: 
-            guide_feats = torch.cat([guide, img], 1) 
-        else:
-            guide_feats = self.feature_extractor(torch.cat([guide, img-img.mean((1,2,3), keepdim=True) ], 1))
+
+        guide_feats = self.feature_extractor(guide)
         
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
 
         # Iterations without gradient
-        if self.Npre>0: 
+        if self.Npre > 0:
             with torch.no_grad():
                 Npre = randrange(self.Npre) if train else self.Npre
-                for t in range(Npre):                     
+                for t in range(Npre):
                     img = diffuse_step(cv, ch, img, l=l)
-                    img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
+                    img = adjust_step(img, source, mask_inv, upsample, downsample, eps=eps)
 
         # Iterations with gradient
-        if self.Ntrain>0: 
-            for t in range(self.Ntrain): 
+        if self.Ntrain > 0:
+            for t in range(self.Ntrain):
                 img = diffuse_step(cv, ch, img, l=l)
-                img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
+                img = adjust_step(img, source, mask_inv, upsample, downsample, eps=eps)
 
         return img, {"cv": cv, "ch": ch}
 
@@ -137,7 +136,9 @@ def adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8):
 
     # Rss = source / Iss
     ratio_ss = source / (img_ss + eps)
-    ratio_ss[mask_inv] = 1
+
+    mask_inv_broadcasted = mask_inv.expand_as(ratio_ss)
+    ratio_ss[mask_inv_broadcasted] = 1
 
     # R = NN upsample r
     ratio = upsample(ratio_ss)
