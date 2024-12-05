@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import time
 from .geo_tifffile import read_geotiff3D, write_geotiff3D
-
+from data.utils import bicubic_with_mask
 
 
 class MagicBathyNet(Dataset):
@@ -76,15 +76,18 @@ class MagicBathyNet(Dataset):
             #label = self.transform(label)
         label = label.transpose(2, 0, 1)
         y = torch.tensor(label).to(torch.float32).unsqueeze(0)
-        mask_hr = (y != 0).all(dim=0, keepdim=True)
-        mask_lr = (img != 0).all(dim=0, keepdim=True).unsqueeze(0)
-
+        mask_hr = (y != 0).all(dim=0, keepdim=True).float()
+        mask_lr = (img != 0).all(dim=0, keepdim=True).float().unsqueeze(0)
+        source = torch.tensor(img).to(torch.float32).unsqueeze(0)
+        guide = torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0)
+        y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True).squeeze()
+        y_bicubic = y_bicubic * mask_hr
         return {
-            'guide': torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0),
-            'source': torch.tensor(img).to(torch.float32).unsqueeze(0),
+            'guide': guide,
+            'source': source,
             'y': y,
             'mask_lr': mask_lr,
-            'y_bicubic': torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True),
+            'y_bicubic': y_bicubic,
             'mask_hr': mask_hr
         }
 
