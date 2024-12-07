@@ -7,13 +7,13 @@ from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
-INPUT_DIM = 1
+INPUT_DIM = 4
 FEATURE_DIM = 64
 
 class GADBase(nn.Module):
     
     def __init__(
-            self, feature_extractor='Unet',
+            self, feature_extractor='none',
             Npre=8000, Ntrain=1024, 
     ):
         super().__init__()
@@ -75,25 +75,38 @@ class GADBase(nn.Module):
         upsample = lambda x: F.interpolate(x, (h, w), mode='nearest')
 
         # Deep Learning version or RGB version to calucalte the coefficients
-
-        guide_feats = self.feature_extractor(guide)
+        if self.feature_extractor is None:
+            guide_feats = torch.cat([guide, img], 1)
+        else:
+            a = img-img.mean((1,2,3), keepdim=True)
+            b = guide
+            s = torch.cat([b, a], 1)
+            print(f"amin: {a.min()} amax: {a.max()}bmin: {b.min()} bmax: {b.max()}, smin: {s.min()}, smax: {s.max()}")
+            guide_feats = self.feature_extractor(s)
         
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
 
         # Iterations without gradient
-        if self.Npre > 0:
+        if self.Npre>0:
             with torch.no_grad():
                 Npre = randrange(self.Npre) if train else self.Npre
+                img_pref = img
                 for t in range(Npre):
                     img = diffuse_step(cv, ch, img, l=l)
-                    img = adjust_step(img, source, mask_inv, upsample, downsample, eps=eps)
+                    img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
+                    #comparison = torch.eq(img, img_pref)
+                    #differences = torch.where(comparison == False)
+                    #num_differences = torch.sum(~comparison).item()
+                    #print("Number of differences:", num_differences)
+                    #img_pref = img
+
 
         # Iterations with gradient
-        if self.Ntrain > 0:
+        if self.Ntrain>0:
             for t in range(self.Ntrain):
                 img = diffuse_step(cv, ch, img, l=l)
-                img = adjust_step(img, source, mask_inv, upsample, downsample, eps=eps)
+                img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
 
         return img, {"cv": cv, "ch": ch}
 
