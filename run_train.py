@@ -21,13 +21,14 @@ from datasets import MagicBathyNet
 # import nvidia_smi
 # nvidia_smi.nvmlInit()
 
+from datasets.geo_tifffile import read_geotiff3D, write_geotiff3D
+
 
 class Trainer:
 
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.use_wandb = self.args.wandb
-
         self.dataloaders = self.get_dataloaders(args)
         
         seed_all(args.seed)
@@ -97,6 +98,9 @@ class Trainer:
             'mask_lr': (sample[2] != 0).any(dim=0).float(),
             'y_bicubic': torch.nn.functional.interpolate(sample[2].unsqueeze(0), scale_factor=40, mode='bicubic', align_corners=True)
             }
+
+
+
     def train_epoch(self, tnr=None):
         self.train_stats = defaultdict(float)
 
@@ -109,6 +113,8 @@ class Trainer:
 
         with tqdm(self.dataloaders.datasets['train'], leave=False) as inner_tnr:
             inner_tnr.set_postfix(training_loss=np.nan)
+            pref_loss = 0
+            img_tensors = []
             for i, sample in enumerate(inner_tnr):
                 #sample = self.prepare_magic_bathy(sample)
                 sample = to_cuda(sample)
@@ -130,7 +136,10 @@ class Trainer:
                     #raise Exception("detected NaN loss..")
                     
                 for key in loss_dict:
-                    self.train_stats[key] += loss_dict[key].detach().cpu().item() if torch.is_tensor(loss_dict[key]) else loss_dict[key] 
+                    self.train_stats[key] += loss_dict[key].detach().cpu().item() if torch.is_tensor(loss_dict[key]) else loss_dict[key]
+
+                #img = self.dataloaders.denormalize_out(output['y_pred'])
+                
 
                 if self.epoch > 0 or not self.args.skip_first:
                     if not args.no_opt:
@@ -161,6 +170,8 @@ class Trainer:
 
                     # reset metrics
                     self.train_stats = defaultdict(float)
+
+
 
     def validate(self):
         self.val_stats = defaultdict(float)
@@ -264,6 +275,7 @@ class Trainer:
 
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint['model'])
+
         if not args.no_opt:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.scheduler.load_state_dict(checkpoint['scheduler'])
