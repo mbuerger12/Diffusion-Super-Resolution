@@ -152,7 +152,8 @@ class Trainer:
                         self.optimizer.step()
 
                 self.iter += 1
-
+                name = sample['img_path'].split('\\')[-1]
+                self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', name))
                 if (i + 1) % min(self.args.logstep_train, len(self.dataloaders.datasets['train'])) == 0:
                     self.train_stats = {k: v / self.args.logstep_train for k, v in self.train_stats.items()}
 

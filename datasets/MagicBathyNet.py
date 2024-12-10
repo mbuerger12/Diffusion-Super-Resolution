@@ -8,7 +8,7 @@ import torch
 import time
 from .geo_tifffile import read_geotiff3D, write_geotiff3D
 from data.utils import bicubic_with_mask
-
+from osgeo import gdal
 
 class MagicBathyNet(Dataset):
     """
@@ -83,6 +83,7 @@ class MagicBathyNet(Dataset):
         y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True).squeeze()
         y_bicubic = y_bicubic * mask_hr
         return {
+            'img_path': img_path,
             'guide': guide,
             'source': source,
             'y': y,
@@ -115,11 +116,11 @@ class MagicBathyNet(Dataset):
 
         if "agia_napa" in path:
             norm_param_s2 = self.norm_params["s2_an"]
-            norm_param_spot6 = self.norm_params["spot6_an"]
+            norm_param_aerial = self.norm_params["aerial_an"]
             norm_param_depth = -30.443
         elif "puck_lagoon" in path:
             norm_param_s2 = self.norm_params["s2_pl"]
-            norm_param_spot6 = self.norm_params["spot6_pl"]
+            norm_param_spot6 = self.norm_params["aerial_pl"]
             norm_param_depth = -11.0
 
         if not bathy:
@@ -131,7 +132,42 @@ class MagicBathyNet(Dataset):
             img *= norm_param_depth
 
         return img
-    
+
+    def write_rgb_tiff(self, save_path, img, metadata=None):
+        """
+        Save an RGB image as a GeoTIFF file.
+
+        Args:
+            save_path (str): Path to save the TIFF file.
+            img (numpy.ndarray): Image data in shape (H, W, C) with C=3 for RGB.
+            metadata (dict, optional): Metadata for geotransform and projection.
+        """
+        if isinstance(img, torch.Tensor):
+            img = img.cpu().detach().numpy()  # Ensure it's on the CPU and convert to NumPy
+
+        if len(img.shape) != 3 or img.shape[2] != 3:
+            raise ValueError(f"Expected image with shape (H, W, 3), got {img.shape}")
+
+        height, width, channels = img.shape
+        if channels != 3:
+            raise ValueError(f"Only RGB images with 3 channels are supported, got {channels} channels")
+
+        # Create GDAL dataset with 3 bands
+        driver = gdal.GetDriverByName("GTiff")
+        dataset = driver.Create(save_path, width, height, 3, gdal.GDT_Float32)
+
+        # Set geotransform and projection if provided
+
+        # Write each channel to its respective band
+        for i in range(3):
+            band = dataset.GetRasterBand(i + 1)  # Bands are 1-indexed in GDAL
+            band.WriteArray(img[:, :, i])
+
+        # Flush data to disk
+        dataset.FlushCache()
+        print(f"RGB GeoTIFF saved to {save_path}")
+
+
     def save_as_tiff(self, img, original_path, save_path):
         """
         Saves the input image as a TIFF file. Denormalizes the image before saving.
@@ -142,9 +178,14 @@ class MagicBathyNet(Dataset):
             save_path (str): The path to save the image.
 
         """
+
         img = self.denormalize(img, original_path, bathy=self.bathymetry)#.round().astype(np.uint16)
         _, metadata = read_geotiff3D(original_path, self.bathymetry)
-        write_geotiff3D(save_path, img, metadata, self.bathymetry)
+        img = img.squeeze()
+        img = img.squeeze()
+        img = img.permute(1, 2, 0)
+        self.write_rgb_tiff(save_path, img, metadata)
+        #write_geotiff3D(save_path, img, metadata, self.bathymetry)
         
 
 
