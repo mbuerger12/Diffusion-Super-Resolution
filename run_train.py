@@ -18,6 +18,7 @@ from data import MiddleburyDataset, NYUv2Dataset, DIMLDataset
 from losses import get_loss
 from utils import new_log, to_cuda, seed_all
 from datasets import MagicBathyNet
+import matplotlib.pyplot as plt
 # import nvidia_smi
 # nvidia_smi.nvmlInit()
 
@@ -30,7 +31,10 @@ class Trainer:
         self.args = args
         self.use_wandb = self.args.wandb
         self.dataloaders = self.get_dataloaders(args)
-        
+
+        self.cv_list = []  # Vertical diffusion coefficients
+        self.ch_list = []  # Horizontal diffusion coefficients
+
         seed_all(args.seed)
 
         self.model = GADBase( 
@@ -127,7 +131,8 @@ class Trainer:
                     self.optimizer.zero_grad()
 
                 output = self.model(sample, train=True)
-
+                self.cv_list.append(output['cv'].detach().cpu().numpy())  # Convert to NumPy for plotting
+                self.ch_list.append(output['ch'].detach().cpu().numpy())
                 loss, loss_dict = get_loss(output, sample)
 
                 if torch.isnan(loss):
@@ -151,9 +156,12 @@ class Trainer:
                     if not args.no_opt:
                         self.optimizer.step()
 
-                self.iter += 1
                 name = sample['img_path'].split('\\')[-1]
-                self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', name))
+                if "359" in name:
+                    self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', f"epoch_{str(self.epoch)}"))
+
+                self.iter += 1
+
                 if (i + 1) % min(self.args.logstep_train, len(self.dataloaders.datasets['train'])) == 0:
                     self.train_stats = {k: v / self.args.logstep_train for k, v in self.train_stats.items()}
 
@@ -171,8 +179,22 @@ class Trainer:
 
                     # reset metrics
                     self.train_stats = defaultdict(float)
+            self.plot_coefficients(self.cv_list, self.ch_list)
 
+    def plot_coefficients(self, cv_list, ch_list):
+        for i, (cv, ch) in enumerate(zip(cv_list, ch_list)):
+            plt.figure(figsize=(12, 5))
+            plt.subplot(1, 2, 1)
+            plt.title(f'Vertical Coefficients (Step {i})')
+            plt.imshow(cv.squeeze(), cmap='viridis')  # Ensure 2D array
+            plt.colorbar()
 
+            plt.subplot(1, 2, 2)
+            plt.title(f'Horizontal Coefficients (Step {i})')
+            plt.imshow(ch.squeeze(), cmap='viridis')  # Ensure 2D array
+            plt.colorbar()
+
+            plt.show()
 
     def validate(self):
         self.val_stats = defaultdict(float)
@@ -190,7 +212,7 @@ class Trainer:
                 for key in loss_dict:
                     self.val_stats[key] +=  loss_dict[key].detach().cpu().item() if torch.is_tensor(loss_dict[key]) else loss_dict[key] 
 
-            self.val_stats = {k: v / len(self.dataloaders['val']) for k, v in self.val_stats.items()}
+            self.val_stats = {k: v / len(self.dataloaders.datasets['val']) for k, v in self.val_stats.items()}
 
             if self.use_wandb:
                 wandb.log({k + '/val': v for k, v in self.val_stats.items()}, self.iter)
