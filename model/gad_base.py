@@ -2,14 +2,14 @@ import os
 from random import randrange
 from re import I
 import matplotlib.pyplot as plt
-
+import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
 INPUT_DIM = 4
-FEATURE_DIM = 5
+FEATURE_DIM = 64
 
 class GADBase(nn.Module):
     
@@ -94,8 +94,8 @@ class GADBase(nn.Module):
         guide, source, mask_lr = sample['guide'], sample['source'], sample['mask_lr']
         self.sample_name = sample['img_path'].split('\\')[-1]
         # assert that all values are positive, otherwise shift depth map to positives
-
-        if source.min()<=deps:
+        print(source.min())
+        if source.min()<deps:
             print("Warning: The forward function was called with negative depth values. Values were temporarly shifted. Consider using unnormalized depth values for stability.")
             source += deps
             sample['y_bicubic'] += deps
@@ -103,8 +103,8 @@ class GADBase(nn.Module):
         else:
             shifted = False
 
-        y_pred, aux = self.diffuse(sample['y_bicubic'].clone(), guide.clone(), source, mask_lr < 0.5,
-                 K=torch.exp(self.logk), verbose=False, train=train)
+        y_pred, aux = self.diffuse(sample['y_bicubic'].clone(), guide.clone(), source, sample['y'], mask_lr > 0.5,
+                 K=torch.exp(self.logk),  verbose=False, train=train)
 
         # revert the shift
         if shifted:
@@ -114,7 +114,7 @@ class GADBase(nn.Module):
         return {**{'y_pred': y_pred}, **aux}
 
 
-    def diffuse(self, img, guide, source, mask_inv,
+    def diffuse(self, img, guide, source, y, mask_inv,
         l=0.24, K=0.01, verbose=False, eps=1e-8, train=False):
 
         _, _,h,w = guide.shape
@@ -132,15 +132,48 @@ class GADBase(nn.Module):
             #guide_feats = guide_feats.permute(0,3,1,2)
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
-        if '359' in self.sample_name:
 
+        if '359' in self.sample_name:
+            # Convert tensors to NumPy
+            """
+            cvi = cv.cpu().numpy()  # Shape: (1, 2, 511, 511)
+            chi = ch.cpu().numpy()  # Shape: (1, 2, 511, 511)
+
+            # Select the first batch and individual channels
+            cvi = cvi[0, 0, :, :]  # First channel of cv, shape: (511, 511)
+            chi = chi[0, 0, :, :]  # Second channel of ch, shape: (511, 511)
+
+            # Plot cv and ch separately
+            fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+            # Plot cv
+            axes[0].imshow(cvi, cmap='viridis')
+            axes[0].set_title('Coefficient cv')
+            axes[0].axis('off')  # Turn off axes for better visualization
+
+            # Plot ch
+            axes[1].imshow(chi, cmap='viridis')
+            axes[1].set_title('Coefficient ch')
+            axes[1].axis('off')  # Turn off axes for better visualization
+
+            # Adjust layout and show the plots
+            plt.tight_layout()
+            plt.show()
+            """
+            # Plot the combined image
             dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir')))}")
             os.mkdir(dir_name)
             self.plot_tensor_image(img, title="image", path=dir_name)
             self.plot_tensor_image(guide, title="guide", path=dir_name)
             self.plot_tensor_image(source, title="source", path=dir_name)
             #for i in range(0,FEATURE_DIM):
-            self.plot_tensor_image(guide_feats, title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(y, title="label", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 0, :, :], title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 1, :, :], title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 2, :, :], title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 3, :, :], title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 4, :, :], title=f"guide_feats", path=dir_name)
+            self.plot_tensor_image(guide_feats[:, 5, :, :], title=f"guide_feats", path=dir_name)
 
 
 

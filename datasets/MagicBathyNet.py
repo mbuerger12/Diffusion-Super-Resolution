@@ -35,6 +35,7 @@ class MagicBathyNet(Dataset):
         return len(self.images)
 
     def __getitem__(self, idx):
+
         img_path = self.images[idx]
         label_path = self.labels[idx]
         bath_path = self.bathymetry_images[idx]
@@ -59,7 +60,7 @@ class MagicBathyNet(Dataset):
 
         img = img[..., [2, 1, 0]] if "agia_napa" in img_path else img
         img = img.transpose(2, 0, 1)
-        img = torch.clamp(torch.tensor(img), 0, 1)
+        img = torch.clamp(torch.tensor(img), 0.1, 1)
         bath = torch.clamp(torch.tensor(bath), 0, 1)
         print(f"imgmin {img.min()} imgmax {img.max()} label {label.min()} label {label.max()} bath {bath.min()} bath {bath.max()}")
 
@@ -80,8 +81,9 @@ class MagicBathyNet(Dataset):
         mask_lr = (img != 0).all(dim=0, keepdim=True).float().unsqueeze(0)
         source = torch.tensor(img).to(torch.float32).unsqueeze(0)
         guide = torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0)
-        y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True).squeeze()
-        y_bicubic = y_bicubic * mask_hr
+        #guide = guide.repeat(1, 3, 1, 1)
+        y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True)
+        #y_bicubic = y_bicubic * mask_hr
         return {
             'img_path': img_path,
             'guide': guide,
@@ -154,6 +156,7 @@ class MagicBathyNet(Dataset):
 
         # Create GDAL dataset with 3 bands
         driver = gdal.GetDriverByName("GTiff")
+        save_path = os.path.join(save_path, "output.tif")
         dataset = driver.Create(save_path, width, height, 3, gdal.GDT_Float32)
 
         # Set geotransform and projection if provided
@@ -342,7 +345,6 @@ class MagicBathyNetDataLoader:
         # Initialize train/test splits
         train_aerial, train_s2, train_depth = [], [], []
         test_aerial, test_s2, test_depth = [], [], []
-
         for img_id in common_ids:
             aerial_path = aerial_dict[img_id]
             s2_path = s2_dict[img_id]

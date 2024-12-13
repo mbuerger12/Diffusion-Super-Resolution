@@ -123,7 +123,7 @@ class Trainer:
                 #sample = self.prepare_magic_bathy(sample)
                 sample = to_cuda(sample)
 
-                valid_samples = (sample['y'].sum(dim=(1, 2, 3)) != 0)
+                valid_samples = (sample['y'].sum(dim=(0, 1, 2)) != 0)
                 if not valid_samples.any():
                     continue
 
@@ -179,7 +179,7 @@ class Trainer:
 
                     # reset metrics
                     self.train_stats = defaultdict(float)
-            self.plot_coefficients(self.cv_list, self.ch_list)
+            #self.plot_coefficients(self.cv_list, self.ch_list)
 
     def plot_coefficients(self, cv_list, ch_list):
         for i, (cv, ch) in enumerate(zip(cv_list, ch_list)):
