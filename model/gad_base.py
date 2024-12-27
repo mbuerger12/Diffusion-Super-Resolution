@@ -8,13 +8,13 @@ from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
-INPUT_DIM = 4
+INPUT_DIM = 6
 FEATURE_DIM = 64
 
 class GADBase(nn.Module):
     
     def __init__(
-            self, feature_extractor='UNet',
+            self, feature_extractor='Unet',
             Npre=8000, Ntrain=1024, 
     ):
         super().__init__()

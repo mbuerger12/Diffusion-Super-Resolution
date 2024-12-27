@@ -9,7 +9,10 @@ import time
 from .geo_tifffile import read_geotiff3D, write_geotiff3D
 from data.utils import bicubic_with_mask
 from osgeo import gdal
-
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 class MagicBathyNet(Dataset):
     """
     Dataset class for Sentinel-2 and SPOT-6 images
@@ -80,8 +83,9 @@ class MagicBathyNet(Dataset):
         mask_hr = (y != 0).all(dim=0, keepdim=True).float()
         mask_lr = (img != 0).all(dim=0, keepdim=True).float().unsqueeze(0)
         source = torch.tensor(img).to(torch.float32).unsqueeze(0)
-        guide = torch.tensor(bath).to(torch.float32).unsqueeze(0).unsqueeze(0)
+        guide = torch.tensor(bath).to(torch.float32).unsqueeze(0)
         #guide = guide.repeat(1, 3, 1, 1)
+        guide = self.depth_to_rgb(guide).unsqueeze(0)
         y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True)
         #y_bicubic = y_bicubic * mask_hr
         return {
@@ -95,6 +99,40 @@ class MagicBathyNet(Dataset):
         }
 
         #return img_path, label_path, img.to(torch.float32), label.to(torch.float32)
+
+    def depth_to_rgb(self, depth_image, colormap='viridis'):
+        """
+        Convert a depth image to an RGB image using a colormap.
+
+        Args:
+            depth_image (numpy.ndarray): The depth image as a 2D array (H, W)
+                                         or possibly shape (N, 1, H, W) etc.
+            colormap (str): The name of the colormap to use (e.g. 'viridis', 'plasma').
+
+        Returns:
+            torch.Tensor: The RGB image as a PyTorch tensor in shape (3, H, W).
+        """
+        # If depth_image is (N, 1, H, W), squeeze out the extra dims
+        # so we end up with just (H, W). Adjust as needed for your data.
+        depth_image_2d = depth_image.squeeze()
+
+        # Now depth_image_2d should be shape (H, W).
+        # Optional: Normalize if needed:
+        # norm = Normalize(vmin=np.min(depth_image_2d), vmax=np.max(depth_image_2d))
+        # normalized_depth = norm(depth_image_2d)
+        normalized_depth = depth_image_2d
+
+        # Apply the colormap
+        colormap_func = plt.get_cmap(colormap)
+        rgb_image = colormap_func(normalized_depth)[..., :3]  # shape => (H, W, 3)
+
+        # Convert to PyTorch tensor in shape (3, H, W)
+        rgb_tensor = torch.from_numpy(rgb_image).permute(2, 0, 1).float()
+
+        return rgb_tensor
+
+
+
 
     def denormalize(self, img, path, is_label=True, bathy=False):
         """
