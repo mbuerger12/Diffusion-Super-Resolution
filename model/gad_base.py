@@ -14,11 +14,11 @@ FEATURE_DIM = 64
 class GADBase(nn.Module):
     
     def __init__(
-            self, feature_extractor='Unet',
+            self, feature_extractor='UNet',
             Npre=8000, Ntrain=1024, 
     ):
         super().__init__()
-
+        self.feature_extractor = feature_extractor
         self.feature_extractor_name = feature_extractor    
         self.Npre = Npre
         self.Ntrain = Ntrain
@@ -126,40 +126,15 @@ class GADBase(nn.Module):
         # Deep Learning version or RGB version to calucalte the coefficients
         print(self.feature_extractor_name)
         if self.feature_extractor is None:
-            guide_feats = torch.cat([img, guide], 1)
+            guide_feats = torch.cat([guide, img], 1)
         else:
-            guide_feats = self.feature_extractor(torch.cat([img-img.mean((1,2,3), keepdim=True), guide ], 1))
+            guide_feats = self.feature_extractor(torch.cat([guide, img-img.mean((1,2,3), keepdim=True)], 1))
             #guide_feats = guide_feats.permute(0,3,1,2)
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
 
         if '359' in self.sample_name:
-            # Convert tensors to NumPy
-            """
-            cvi = cv.cpu().numpy()  # Shape: (1, 2, 511, 511)
-            chi = ch.cpu().numpy()  # Shape: (1, 2, 511, 511)
 
-            # Select the first batch and individual channels
-            cvi = cvi[0, 0, :, :]  # First channel of cv, shape: (511, 511)
-            chi = chi[0, 0, :, :]  # Second channel of ch, shape: (511, 511)
-
-            # Plot cv and ch separately
-            fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-
-            # Plot cv
-            axes[0].imshow(cvi, cmap='viridis')
-            axes[0].set_title('Coefficient cv')
-            axes[0].axis('off')  # Turn off axes for better visualization
-
-            # Plot ch
-            axes[1].imshow(chi, cmap='viridis')
-            axes[1].set_title('Coefficient ch')
-            axes[1].axis('off')  # Turn off axes for better visualization
-
-            # Adjust layout and show the plots
-            plt.tight_layout()
-            plt.show()
-            """
             # Plot the combined image
             dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir')))}")
             os.mkdir(dir_name)
