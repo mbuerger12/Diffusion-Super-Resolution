@@ -47,7 +47,13 @@ class MagicBathyNet(Dataset):
         label = tifffile.imread(label_path).astype(np.float32)
         bath = tifffile.imread(bath_path).astype(np.float32)
         #bath = torch.tensor(bath)
-        if "agia_napa" in img_path:
+        test_setup = True
+        test_image = "411"
+        if test_setup == True:
+            norm_param_s2 = self.norm_params["s2_an"]
+            norm_param_aerial = self.norm_params["aerial_an"]
+            norm_param_depth = -14
+        elif "agia_napa" in img_path:
             norm_param_s2 = self.norm_params["s2_an"]
             norm_param_aerial = self.norm_params["aerial_an"]
             norm_param_depth = -30.443
@@ -55,6 +61,7 @@ class MagicBathyNet(Dataset):
             norm_param_s2 = self.norm_params["s2_pl"]
             norm_param_spot6 = self.norm_params["aerial_pl"]
             norm_param_depth = -11.0
+
 
         img = (img - norm_param_s2[0]) / (norm_param_s2[1] - norm_param_s2[0])
         label = (label - norm_param_aerial[0]) / (norm_param_aerial[1] - norm_param_aerial[0])
@@ -84,8 +91,10 @@ class MagicBathyNet(Dataset):
         mask_lr = (img != 0).all(dim=0, keepdim=True).float().unsqueeze(0)
         source = torch.tensor(img).to(torch.float32).unsqueeze(0)
         guide = torch.tensor(bath).to(torch.float32).unsqueeze(0)
-        #guide = guide.repeat(1, 3, 1, 1)
+
         guide = self.depth_to_rgb(guide).unsqueeze(0)
+        
+        guide = guide.repeat(1, 3, 1, 1)
         y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True)
         #y_bicubic = y_bicubic * mask_hr
         return {
@@ -251,7 +260,8 @@ class MagicBathyNetDataLoader:
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.test_size = test_size
-        self.val_size = val_size / (1 - test_size)
+        self.val_size = None
+        #self.val_size = val_size / (1 - test_size)
 
         self.locations = locations
         self.bathymetry = bathymetry
@@ -291,20 +301,15 @@ class MagicBathyNetDataLoader:
         samples = {"source": [], "y": [], "guide": []}
         for location in self.locations:
             if self.bathymetry:
-                img_dir_bath= os.path.join(
-                    self.root_dir, location, "depth", "aerial")
+                img_dir_bath= os.path.join(self.root_dir, location, "depth", "aerial")
                 img_dir_s2 = os.path.join(self.root_dir, location, "img", "s2")
-                img_dir_spot6 = os.path.join(
-                    self.root_dir, location, "img", "aerial")
+                img_dir_spot6 = os.path.join(self.root_dir, location, "img", "aerial")
             else:
                 img_dir_s2 = os.path.join(self.root_dir, location, "img", "s2")
-                img_dir_spot6 = os.path.join(
-                    self.root_dir, location, "img", "aerial")
-            samples["source"].extend(sorted([os.path.join(
-                img_dir_s2, f) for f in os.listdir(img_dir_s2) if f.endswith(".tif")]))
-            samples["y"].extend(sorted([os.path.join(
-                img_dir_spot6, f) for f in os.listdir(img_dir_spot6) if f.endswith(".tif")]))
-            samples["guide"].extend(sorted([os.path.join(img_dir_bath, f) for f in os.listdir(img_dir_bath) if f.endswith(".tif")]))
+                img_dir_spot6 = os.path.join(self.root_dir, location, "img", "aerial")
+            samples["source"].extend(sorted([os.path.join(img_dir_s2, f) for f in os.listdir(img_dir_s2) if f.endswith(".tif") and "411" in f]))
+            samples["y"].extend(sorted([os.path.join(img_dir_spot6, f) for f in os.listdir(img_dir_spot6) if f.endswith(".tif") and "411" in f]))
+            samples["guide"].extend(sorted([os.path.join(img_dir_bath, f) for f in os.listdir(img_dir_bath) if f.endswith(".tif") and "411" in f]))
         return samples
 
 
@@ -393,10 +398,15 @@ class MagicBathyNetDataLoader:
                 test_aerial.append(aerial_path)
                 test_s2.append(s2_path)
                 test_depth.append(depth_path)
+                #for testing
+                train_aerial.append(aerial_path)
+                train_s2.append(s2_path)
+                train_depth.append(depth_path)
             elif "puck_lagoon" in aerial_path and img_id in puck_lagoon_test_ids:
                 test_aerial.append(aerial_path)
                 test_s2.append(s2_path)
                 test_depth.append(depth_path)
+
             else:
                 train_aerial.append(aerial_path)
                 train_s2.append(s2_path)
@@ -408,13 +418,19 @@ class MagicBathyNetDataLoader:
         train_aerial = sorted(train_aerial)
         train_s2 = sorted(train_s2)
         train_depth = sorted(train_depth)
-
+        """
         images_s2_train, images_s2_val, images_aerial_train, images_aerial_val, depth_train, depth_val = train_test_split(train_s2, train_aerial, train_depth, test_size=self.val_size, random_state=65)
 
         datasets = {
             "train": MagicBathyNet(images_s2_train, images_aerial_train, depth_train, self.bathymetry, self.transform, self.target_trans, self.norm_params),
             "val": MagicBathyNet(images_s2_val, images_aerial_val, depth_val, self.bathymetry, self.transform, self.target_trans, self.norm_params),
             "test": MagicBathyNet(test_s2, test_aerial, test_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params)
+        }
+        """
+        datasets = {
+            "train": MagicBathyNet(train_s2, train_aerial, train_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params),
+            "val": MagicBathyNet(train_s2, train_aerial, train_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params),
+            "test": MagicBathyNet(train_s2, train_aerial, train_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params)
         }
         return datasets
 
