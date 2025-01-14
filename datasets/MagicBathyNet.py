@@ -106,7 +106,8 @@ class MagicBathyNet(Dataset):
         guide = bath.to(torch.float32).clone().detach()
         #guide = self.depth_to_rgb(guide)
         guide = guide.unsqueeze(0)
-        #guide = guide[: , :256, :256]
+        guide = guide.repeat(9, 1, 1)
+        # guide = guide[: , :256, :256]
         #preparing masks -> not used currently
         mask_lr = (source != 0).all(dim=0, keepdim=True).float()
         mask_hr = (~torch.isnan(guide)).float()

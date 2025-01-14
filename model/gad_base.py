@@ -8,7 +8,7 @@ from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
-INPUT_DIM = 4
+INPUT_DIM = 12
 FEATURE_DIM = 64
 
 class GADBase(nn.Module):
@@ -136,7 +136,7 @@ class GADBase(nn.Module):
             dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir')))}")
             os.mkdir(dir_name)
             self.plot_tensor_image(img, title="image", path=dir_name)
-            self.plot_tensor_image(guide, title="guide", path=dir_name)
+            #self.plot_tensor_image(guide, title="guide", path=dir_name)
             """
             self.plot_tensor_image(source, title="source", path=dir_name)
             #for i in range(0,FEATURE_DIM):
