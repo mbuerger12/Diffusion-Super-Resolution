@@ -12,6 +12,7 @@ from osgeo import gdal
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import interpolate
 from matplotlib.colors import Normalize
 class MagicBathyNet(Dataset):
     """
@@ -24,16 +25,24 @@ class MagicBathyNet(Dataset):
         norm_params (dict): Dictionary with normalization parameters for each location
     """
 
-    def __init__(self, images, labels, bathymetry_images, bathymetry=False, transform=None, target_transform = None, norm_params = None):
+    def __init__(self, images, labels, bathymetry_images, bathymetry=False, transform=None, target_transform = None, norm_params = None, batch_size=1):
 
         self.images = images
         self.labels = labels
+        self.batch_size = batch_size
         self.transform = transform
         self.target_trans = target_transform
         self.norm_params = norm_params
         self.target_trans = target_transform
         self.bathymetry = bathymetry
         self.bathymetry_images = bathymetry_images
+        self.data = None
+
+
+
+
+
+
     def __len__(self):
         return len(self.images)
 
@@ -48,7 +57,7 @@ class MagicBathyNet(Dataset):
         bath = tifffile.imread(bath_path).astype(np.float32)
         #bath = torch.tensor(bath)
         test_setup = True
-        test_image = "411"
+        test_image = "410"
         if test_setup == True:
             norm_param_s2 = self.norm_params["s2_an"]
             norm_param_aerial = self.norm_params["aerial_an"]
@@ -70,13 +79,13 @@ class MagicBathyNet(Dataset):
 
         img = img[..., [2, 1, 0]] if "agia_napa" in img_path else img
         img = img.transpose(2, 0, 1)
-        img = torch.clamp(torch.tensor(img), 0.1, 1)
+        img = torch.clamp(torch.tensor(img), 0, 1)
         bath = torch.clamp(torch.tensor(bath), 0, 1)
-        print(f"imgmin {img.min()} imgmax {img.max()} label {label.min()} label {label.max()} bath {bath.min()} bath {bath.max()}")
+        #print(f"imgmin {img.min()} imgmax {img.max()} label {label.min()} label {label.max()} bath {bath.min()} bath {bath.max()}")
 
         # Swap from BGR to RGB
 
-
+        """
         if self.transform:
             img = self.transform(img)
 
@@ -85,18 +94,27 @@ class MagicBathyNet(Dataset):
         else:
             print("No target transform")
             #label = self.transform(label)
+        """
+        #preparing y
         label = label.transpose(2, 0, 1)
-        y = torch.tensor(label).to(torch.float32).unsqueeze(0)
-        mask_hr = (y != 0).all(dim=0, keepdim=True).float()
-        mask_lr = (img != 0).all(dim=0, keepdim=True).float().unsqueeze(0)
-        source = torch.tensor(img).to(torch.float32).unsqueeze(0)
-        guide = torch.tensor(bath).to(torch.float32).unsqueeze(0)
+        y = torch.tensor(label).to(torch.float32)
+        #y = y[: , :256, :256]
+        #preparing source
+        source = img.to(torch.float32).clone().detach()
+        #source = source[: , :32, :32]
+        #preparing guide
+        guide = bath.to(torch.float32).clone().detach()
+        #guide = self.depth_to_rgb(guide)
+        guide = guide.unsqueeze(0)
+        #guide = guide[: , :256, :256]
+        #preparing masks -> not used currently
+        mask_lr = (source != 0).all(dim=0, keepdim=True).float()
+        mask_hr = (~torch.isnan(guide)).float()
 
-        guide = self.depth_to_rgb(guide).unsqueeze(0)
-        
-        guide = guide.repeat(1, 3, 1, 1)
-        y_bicubic = torch.nn.functional.interpolate(torch.tensor(img).to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True)
-        #y_bicubic = y_bicubic * mask_hr
+        #preparing y bicubic with interpolate function
+        y_bicubic = torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True).clone().detach()
+        y_bicubic = y_bicubic.squeeze(0)
+        #y_bicubic = y_bicubic[: , :256, :256]
         return {
             'img_path': img_path,
             'guide': guide,
@@ -107,7 +125,6 @@ class MagicBathyNet(Dataset):
             'mask_hr': mask_hr
         }
 
-        #return img_path, label_path, img.to(torch.float32), label.to(torch.float32)
 
     def depth_to_rgb(self, depth_image, colormap='viridis'):
         """
@@ -176,6 +193,7 @@ class MagicBathyNet(Dataset):
             if is_label or "spot6" in path:
                 img = img * (norm_param_spot6[1] - norm_param_spot6[0]) + norm_param_spot6[0]
             else:
+                #img = (img - norm_param_s2[0]) / (norm_param_s2[1] - norm_param_s2[0])
                 img = img * (norm_param_s2[1] - norm_param_s2[0]) + norm_param_s2[0]
         else:
             img *= norm_param_depth
@@ -307,9 +325,9 @@ class MagicBathyNetDataLoader:
             else:
                 img_dir_s2 = os.path.join(self.root_dir, location, "img", "s2")
                 img_dir_spot6 = os.path.join(self.root_dir, location, "img", "aerial")
-            samples["source"].extend(sorted([os.path.join(img_dir_s2, f) for f in os.listdir(img_dir_s2) if f.endswith(".tif") and "411" in f]))
-            samples["y"].extend(sorted([os.path.join(img_dir_spot6, f) for f in os.listdir(img_dir_spot6) if f.endswith(".tif") and "411" in f]))
-            samples["guide"].extend(sorted([os.path.join(img_dir_bath, f) for f in os.listdir(img_dir_bath) if f.endswith(".tif") and "411" in f]))
+            samples["source"].extend(sorted([os.path.join(img_dir_s2, f) for f in os.listdir(img_dir_s2) if f.endswith(".tif") and "410" in f]))
+            samples["y"].extend(sorted([os.path.join(img_dir_spot6, f) for f in os.listdir(img_dir_spot6) if f.endswith(".tif") and "410" in f]))
+            samples["guide"].extend(sorted([os.path.join(img_dir_bath, f) for f in os.listdir(img_dir_bath) if f.endswith(".tif") and "410" in f]))
         return samples
 
 
@@ -432,7 +450,10 @@ class MagicBathyNetDataLoader:
             "val": MagicBathyNet(train_s2, train_aerial, train_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params),
             "test": MagicBathyNet(train_s2, train_aerial, train_depth, self.bathymetry, self.transform, self.target_trans, self.norm_params)
         }
-        return datasets
+        phases = "train", "val", "test"
+        return {phase: DataLoader(datasets[phase], batch_size=self.batch_size, num_workers=self.num_workers,
+                shuffle=True, drop_last=False) for phase in phases}
+        #return datasets
 
 
     def get_dataloader(self, set_type="train"):

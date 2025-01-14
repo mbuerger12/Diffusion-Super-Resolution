@@ -8,7 +8,7 @@ from torch import nn
 import torch.nn.functional as F
 import segmentation_models_pytorch as smp
 
-INPUT_DIM = 6
+INPUT_DIM = 4
 FEATURE_DIM = 64
 
 class GADBase(nn.Module):
@@ -92,9 +92,8 @@ class GADBase(nn.Module):
 
     def forward(self, sample, train=False, deps=0.1):
         guide, source, mask_lr = sample['guide'], sample['source'], sample['mask_lr']
-        self.sample_name = sample['img_path'].split('\\')[-1]
+        self.sample_name = sample['img_path'][0][0].split('\\')[-1]
         # assert that all values are positive, otherwise shift depth map to positives
-        print(source.min())
         if source.min()<deps:
             print("Warning: The forward function was called with negative depth values. Values were temporarly shifted. Consider using unnormalized depth values for stability.")
             source += deps
@@ -124,24 +123,24 @@ class GADBase(nn.Module):
         downsample = nn.AdaptiveAvgPool2d((sh, sw))
         upsample = lambda x: F.interpolate(x, (h, w), mode='nearest')
         # Deep Learning version or RGB version to calucalte the coefficients
-        print(self.feature_extractor_name)
         if self.feature_extractor is None:
             guide_feats = torch.cat([guide, img], 1)
         else:
             guide_feats = self.feature_extractor(torch.cat([guide, img-img.mean((1,2,3), keepdim=True)], 1))
-            #guide_feats = guide_feats.permute(0,3,1,2)
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
 
-        if '359' in self.sample_name:
+        if '410' in self.sample_name:
 
             # Plot the combined image
             dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir')))}")
             os.mkdir(dir_name)
             self.plot_tensor_image(img, title="image", path=dir_name)
             self.plot_tensor_image(guide, title="guide", path=dir_name)
+            """
             self.plot_tensor_image(source, title="source", path=dir_name)
             #for i in range(0,FEATURE_DIM):
+            
             self.plot_tensor_image(y, title="label", path=dir_name)
             self.plot_tensor_image(guide_feats[:, 0, :, :], title=f"guide_feats", path=dir_name)
             self.plot_tensor_image(guide_feats[:, 1, :, :], title=f"guide_feats", path=dir_name)
@@ -149,7 +148,7 @@ class GADBase(nn.Module):
             self.plot_tensor_image(guide_feats[:, 3, :, :], title=f"guide_feats", path=dir_name)
             self.plot_tensor_image(guide_feats[:, 4, :, :], title=f"guide_feats", path=dir_name)
             self.plot_tensor_image(guide_feats[:, 5, :, :], title=f"guide_feats", path=dir_name)
-
+            """
 
 
         # Iterations without gradient
@@ -159,15 +158,12 @@ class GADBase(nn.Module):
                 for t in range(Npre):
                     img = diffuse_step(cv, ch, img, l=l)
                     img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
-        if '359' in self.sample_name:
-            self.plot_tensor_image(img, title="image-Npre", path=dir_name)
-
         # Iterations with gradient
         if self.Ntrain>0:
             for t in range(self.Ntrain):
                 img = diffuse_step(cv, ch, img, l=l)
                 img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
-        if '359' in self.sample_name:
+        if '410' in self.sample_name:
             self.plot_tensor_image(img, title="image-Ntrain", path=dir_name)
         return img, {"cv": cv, "ch": ch}
 
@@ -211,8 +207,8 @@ def adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8):
     # Rss = source / Iss
     ratio_ss = source / (img_ss + eps)
 
-    mask_inv_broadcasted = mask_inv.expand_as(ratio_ss)
-    ratio_ss[mask_inv_broadcasted] = 1
+    #mask_inv_broadcasted = mask_inv.expand_as(ratio_ss)
+    #ratio_ss[mask_inv_broadcasted] = 1
 
     # R = NN upsample r
     ratio = upsample(ratio_ss)

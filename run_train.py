@@ -32,8 +32,7 @@ class Trainer:
         self.use_wandb = self.args.wandb
         self.dataloaders = self.get_dataloaders(args)
 
-        self.cv_list = []  # Vertical diffusion coefficients
-        self.ch_list = []  # Horizontal diffusion coefficients
+
 
         seed_all(args.seed)
 
@@ -56,9 +55,7 @@ class Trainer:
         if not args.no_opt:
             self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.w_decay)
             self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=args.lr_step, gamma=args.lr_gamma)
-        else:
-            self.optimizer = None
-            self.scheduler = None
+
 
         self.epoch = 0
         self.iter = 0
@@ -95,16 +92,6 @@ class Trainer:
 
                 self.epoch += 1
 
-    def prepare_magic_bathy(self, sample):
-            return {
-            'guide': sample[3].unsqueeze(0),
-            'source': sample[2].unsqueeze(0),
-            'mask_lr': (sample[2] != 0).any(dim=0).float(),
-            'y_bicubic': torch.nn.functional.interpolate(sample[2].unsqueeze(0), scale_factor=40, mode='bicubic', align_corners=True)
-            }
-
-
-
     def train_epoch(self, tnr=None):
         self.train_stats = defaultdict(float)
 
@@ -117,8 +104,6 @@ class Trainer:
 
         with tqdm(self.dataloaders.datasets['train'], leave=False) as inner_tnr:
             inner_tnr.set_postfix(training_loss=np.nan)
-            pref_loss = 0
-            img_tensors = []
             for i, sample in enumerate(inner_tnr):
                 #sample = self.prepare_magic_bathy(sample)
                 sample = to_cuda(sample)
@@ -131,8 +116,7 @@ class Trainer:
                     self.optimizer.zero_grad()
 
                 output = self.model(sample, train=True)
-                self.cv_list.append(output['cv'].detach().cpu().numpy())  # Convert to NumPy for plotting
-                self.ch_list.append(output['ch'].detach().cpu().numpy())
+
                 loss, loss_dict = get_loss(output, sample)
 
                 if torch.isnan(loss):
@@ -155,10 +139,17 @@ class Trainer:
 
                     if not args.no_opt:
                         self.optimizer.step()
-
-                name = sample['img_path'].split('\\')[-1]
-                if "359" in name:
-                    self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', f"epoch_{str(self.epoch)}"))
+                    """
+                    # Print out some gradients
+                    for name, param in self.model.named_parameters():
+                        if param.grad is not None:
+                            print(f"{name} grad - mean: {param.grad.mean()}, std: {param.grad.std()}")
+                        else:
+                            print(f"{name} grad is None")
+                    """
+                #name = sample['img_path'][0][0].split('\\')[-1]
+                #if "410" in name:
+                #    self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', f"epoch_{str(self.epoch)}"))
 
                 self.iter += 1
 
@@ -181,20 +172,6 @@ class Trainer:
                     self.train_stats = defaultdict(float)
             #self.plot_coefficients(self.cv_list, self.ch_list)
 
-    def plot_coefficients(self, cv_list, ch_list):
-        for i, (cv, ch) in enumerate(zip(cv_list, ch_list)):
-            plt.figure(figsize=(12, 5))
-            plt.subplot(1, 2, 1)
-            plt.title(f'Vertical Coefficients (Step {i})')
-            plt.imshow(cv.squeeze(), cmap='viridis')  # Ensure 2D array
-            plt.colorbar()
-
-            plt.subplot(1, 2, 2)
-            plt.title(f'Horizontal Coefficients (Step {i})')
-            plt.imshow(ch.squeeze(), cmap='viridis')  # Ensure 2D array
-            plt.colorbar()
-
-            plt.show()
 
     def validate(self):
         self.val_stats = defaultdict(float)
