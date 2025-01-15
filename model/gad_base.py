@@ -11,6 +11,23 @@ import segmentation_models_pytorch as smp
 INPUT_DIM = 12
 FEATURE_DIM = 64
 
+class ColorCorrectionNet(nn.Module):
+    def __init__(self, in_ch=3, out_ch=3):
+        super().__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=True)
+        # Optionally initialize as identity
+        with torch.no_grad():
+            nn.init.zeros_(self.conv.bias)
+            eye_init = torch.eye(out_ch, in_ch).view(out_ch, in_ch, 1, 1)
+            self.conv.weight.copy_(eye_init)
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+
+
+
 class GADBase(nn.Module):
     
     def __init__(
@@ -22,7 +39,9 @@ class GADBase(nn.Module):
         self.feature_extractor_name = feature_extractor    
         self.Npre = Npre
         self.Ntrain = Ntrain
- 
+        self.color_correction = ColorCorrectionNet(3, 3)
+
+
         if feature_extractor=='none': 
             # RGB verion of DADA does not need a deep feature extractor
             self.feature_extractor = None
@@ -108,9 +127,9 @@ class GADBase(nn.Module):
         # revert the shift
         if shifted:
             y_pred -= deps
-
+        corrected_img = self.color_correction(y_pred)  # shape [B,3,H,W]
         # return {'y_pred': y_pred} | aux
-        return {**{'y_pred': y_pred}, **aux}
+        return {**{'y_pred': y_pred, 'color_correction': corrected_img}, **aux}
 
 
     def diffuse(self, img, guide, source, y, mask_inv,

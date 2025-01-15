@@ -13,15 +13,16 @@ def get_loss(output, sample):
 
 
     y_pred = output['y_pred']
+    color_correction = output['color_correction']
     y, mask_hr, mask_lr = (sample[k] for k in ('y', 'mask_hr', 'mask_lr'))
 
 
-
+    loss_color = mse_loss_func(color_correction, y)
     l1_loss = l1_loss_func(y_pred, y)
     mse_loss = mse_loss_func(y_pred, y)
     print(f"l1_loss: {l1_loss}")
     print(f"mse_loss: {mse_loss}")
-    loss = mse_loss*10
+    loss = mse_loss*100 + loss_color
 
     return loss, {
         'l1_loss': l1_loss.detach().item(),
