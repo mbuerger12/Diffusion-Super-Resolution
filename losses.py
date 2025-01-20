@@ -7,9 +7,11 @@ import torch
 
 
 def get_loss(output, sample):
-    dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir'))-1)}")
+    directory = os.path.join("train_loops", "no_depth_normalisation")
+    dir_name = os.path.join(directory, f"epoch_{str(len(os.listdir(directory)))}")
+    os.mkdir(dir_name)
     plot_tensor_image(output['y_pred'], dir_name, title="y_pred")
-    plot_tensor_image(sample['y'], dir_name, title="y")
+    plot_tensor_image(output['color_correction'], dir_name, title="color_correction")
 
 
     y_pred = output['y_pred']
@@ -22,7 +24,8 @@ def get_loss(output, sample):
     mse_loss = mse_loss_func(y_pred, y)
     print(f"l1_loss: {l1_loss}")
     print(f"mse_loss: {mse_loss}")
-    loss = mse_loss*100 + loss_color
+    print(f"color loss: {l1_loss}")
+    loss = mse_loss*1000 + loss_color
 
     return loss, {
         'l1_loss': l1_loss.detach().item(),

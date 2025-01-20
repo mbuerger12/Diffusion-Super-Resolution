@@ -12,7 +12,6 @@ from osgeo import gdal
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import interpolate
 from matplotlib.colors import Normalize
 class MagicBathyNet(Dataset):
     """
@@ -25,24 +24,16 @@ class MagicBathyNet(Dataset):
         norm_params (dict): Dictionary with normalization parameters for each location
     """
 
-    def __init__(self, images, labels, bathymetry_images, bathymetry=False, transform=None, target_transform = None, norm_params = None, batch_size=1):
+    def __init__(self, images, labels, bathymetry_images, bathymetry=False, transform=None, target_transform = None, norm_params = None):
 
         self.images = images
         self.labels = labels
-        self.batch_size = batch_size
         self.transform = transform
         self.target_trans = target_transform
         self.norm_params = norm_params
         self.target_trans = target_transform
         self.bathymetry = bathymetry
         self.bathymetry_images = bathymetry_images
-        self.data = None
-
-
-
-
-
-
     def __len__(self):
         return len(self.images)
 
@@ -98,16 +89,21 @@ class MagicBathyNet(Dataset):
         #preparing y
         label = label.transpose(2, 0, 1)
         y = torch.tensor(label).to(torch.float32)
-        #y = y[: , :256, :256]
+
         #preparing source
         source = img.to(torch.float32).clone().detach()
-        #source = source[: , :32, :32]
+
         #preparing guide
+        #bath = torch.tensor(bath).to(torch.float32)
         guide = bath.to(torch.float32).clone().detach()
-        #guide = self.depth_to_rgb(guide)
-        guide = guide.unsqueeze(0)
-        guide = guide.repeat(9, 1, 1)
-        # guide = guide[: , :256, :256]
+        rgb = True
+        if rgb:
+            guide = self.depth_to_rgb(guide)
+            guide = guide.repeat(3, 1, 1)
+        else:
+            guide = guide.unsqueeze(0)
+
+
         #preparing masks -> not used currently
         mask_lr = (source != 0).all(dim=0, keepdim=True).float()
         mask_hr = (~torch.isnan(guide)).float()
@@ -115,7 +111,6 @@ class MagicBathyNet(Dataset):
         #preparing y bicubic with interpolate function
         y_bicubic = torch.nn.functional.interpolate(img.to(torch.float32).unsqueeze(0), size=(512, 512), mode='bicubic', align_corners=True).clone().detach()
         y_bicubic = y_bicubic.squeeze(0)
-        #y_bicubic = y_bicubic[: , :256, :256]
         return {
             'img_path': img_path,
             'guide': guide,
@@ -126,6 +121,7 @@ class MagicBathyNet(Dataset):
             'mask_hr': mask_hr
         }
 
+        #return img_path, label_path, img.to(torch.float32), label.to(torch.float32)
 
     def depth_to_rgb(self, depth_image, colormap='viridis'):
         """
@@ -194,7 +190,6 @@ class MagicBathyNet(Dataset):
             if is_label or "spot6" in path:
                 img = img * (norm_param_spot6[1] - norm_param_spot6[0]) + norm_param_spot6[0]
             else:
-                #img = (img - norm_param_s2[0]) / (norm_param_s2[1] - norm_param_s2[0])
                 img = img * (norm_param_s2[1] - norm_param_s2[0]) + norm_param_s2[0]
         else:
             img *= norm_param_depth

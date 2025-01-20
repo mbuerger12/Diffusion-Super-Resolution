@@ -59,59 +59,10 @@ class GADBase(nn.Module):
         else:
             raise NotImplementedError(f'Feature extractor {feature_extractor}')
 
-    def plot_tensor_image(self, img_tensor, path, title="Image", cmap="viridis", slice_idx=0, ):
-        """
-        Plots the given image tensor.
-
-        Parameters:
-            img_tensor (torch.Tensor): The tensor to plot. Shape can be
-                (N, C, H, W), (C, H, W), (H, W), or (1, C, H, W).
-            title (str): Title of the plot.
-            cmap (str): Colormap for grayscale images (default: 'viridis').
-            slice_idx (int): The index of the slice to plot if the input has multiple slices (default: 0).
-        """
-        # Handle batch dimension (N, C, H, W) or (1, C, H, W)
-        if len(img_tensor.shape) == 4 and img_tensor.shape[0] == 1:  # Single batch
-            img_tensor = img_tensor[0]  # Remove batch dimension
-
-        if len(img_tensor.shape) == 4:  # Batch of channels (C, H, W)
-            # Select the specified slice along the channel dimension
-            if slice_idx < 0 or slice_idx >= img_tensor.shape[0]:
-                raise ValueError(f"Invalid slice_idx {slice_idx} for tensor with shape {img_tensor.shape}")
-            img_tensor = img_tensor[slice_idx]  # Select the desired channel
-
-        # Move tensor to CPU and convert to NumPy
-        img = img_tensor.detach().cpu().numpy()
-
-        # Handle different shapes
-        if len(img.shape) == 3:  # Multi-channel image (C, H, W)
-            img = img.transpose(1, 2, 0)  # Convert to (H, W, C)
-            if img.shape[2] == 1:  # Single channel, convert to 2D
-                img = img.squeeze(-1)
-
-        elif len(img.shape) != 2:  # If not (H, W) or (H, W, C), raise error
-            raise ValueError(f"Unsupported tensor shape after processing: {img_tensor.shape}")
-
-        # Normalize image for display if needed
-        if img.max() > 1 or img.min() < 0:
-            img = (img - img.min()) / (img.max() - img.min())
-
-        # Plot the image
-        plt.figure(figsize=(6, 6))
-        if len(img.shape) == 2:  # Grayscale image
-            plt.imshow(img, cmap=cmap)
-        else:  # RGB image
-            plt.imshow(img)
-        plt.title(title)
-        plt.axis("off")
-
-        save_path = os.path.join(path, title)+".png"
-        plt.savefig(save_path)
-        plt.show()
 
     def forward(self, sample, train=False, deps=0.1):
         guide, source, mask_lr = sample['guide'], sample['source'], sample['mask_lr']
-        self.sample_name = sample['img_path'][0][0].split('\\')[-1]
+        self.sample_name = sample['img_path'][0][0].split('/')[-1]
         # assert that all values are positive, otherwise shift depth map to positives
         if source.min()<deps:
             print("Warning: The forward function was called with negative depth values. Values were temporarly shifted. Consider using unnormalized depth values for stability.")
@@ -129,12 +80,15 @@ class GADBase(nn.Module):
             y_pred -= deps
         corrected_img = self.color_correction(y_pred)  # shape [B,3,H,W]
         # return {'y_pred': y_pred} | aux
+
+        #self.plot_tensor_image(corrected_img, title="Color_correction", path=dir_name)
+
         return {**{'y_pred': y_pred, 'color_correction': corrected_img}, **aux}
 
 
     def diffuse(self, img, guide, source, y, mask_inv,
         l=0.24, K=0.01, verbose=False, eps=1e-8, train=False):
-
+        K = 0.01
         _, _,h,w = guide.shape
         _, _,sh,sw = source.shape
 
@@ -149,27 +103,6 @@ class GADBase(nn.Module):
         # Convert the features to coefficients with the Perona-Malik edge-detection function
         cv, ch = c(guide_feats, K=K)
 
-        if '410' in self.sample_name:
-
-            # Plot the combined image
-            dir_name = os.path.join('save_img_dir', f"epoch_{str(len(os.listdir('save_img_dir')))}")
-            os.mkdir(dir_name)
-            self.plot_tensor_image(img, title="image", path=dir_name)
-            #self.plot_tensor_image(guide, title="guide", path=dir_name)
-            """
-            self.plot_tensor_image(source, title="source", path=dir_name)
-            #for i in range(0,FEATURE_DIM):
-            
-            self.plot_tensor_image(y, title="label", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 0, :, :], title=f"guide_feats", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 1, :, :], title=f"guide_feats", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 2, :, :], title=f"guide_feats", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 3, :, :], title=f"guide_feats", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 4, :, :], title=f"guide_feats", path=dir_name)
-            self.plot_tensor_image(guide_feats[:, 5, :, :], title=f"guide_feats", path=dir_name)
-            """
-
-
         # Iterations without gradient
         if self.Npre>0:
             with torch.no_grad():
@@ -177,13 +110,12 @@ class GADBase(nn.Module):
                 for t in range(Npre):
                     img = diffuse_step(cv, ch, img, l=l)
                     img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
+
         # Iterations with gradient
         if self.Ntrain>0:
             for t in range(self.Ntrain):
                 img = diffuse_step(cv, ch, img, l=l)
                 img = adjust_step(img, source, mask_inv, upsample, downsample, eps=1e-8)
-        if '410' in self.sample_name:
-            self.plot_tensor_image(img, title="image-Ntrain", path=dir_name)
         return img, {"cv": cv, "ch": ch}
 
 

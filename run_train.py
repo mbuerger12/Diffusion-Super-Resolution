@@ -116,7 +116,6 @@ class Trainer:
                     self.optimizer.zero_grad()
 
                 output = self.model(sample, train=True)
-
                 loss, loss_dict = get_loss(output, sample)
 
                 if torch.isnan(loss):
@@ -127,8 +126,6 @@ class Trainer:
                 for key in loss_dict:
                     self.train_stats[key] += loss_dict[key].detach().cpu().item() if torch.is_tensor(loss_dict[key]) else loss_dict[key]
 
-                #img = self.dataloaders.denormalize_out(output['y_pred'])
-                
 
                 if self.epoch > 0 or not self.args.skip_first:
                     if not args.no_opt:
@@ -139,17 +136,6 @@ class Trainer:
 
                     if not args.no_opt:
                         self.optimizer.step()
-                    """
-                    # Print out some gradients
-                    for name, param in self.model.named_parameters():
-                        if param.grad is not None:
-                            print(f"{name} grad - mean: {param.grad.mean()}, std: {param.grad.std()}")
-                        else:
-                            print(f"{name} grad is None")
-                    """
-                #name = sample['img_path'][0][0].split('\\')[-1]
-                #if "410" in name:
-                #    self.dataloaders.datasets['train'].save_as_tiff(output['y_pred'], sample['img_path'], os.path.join('.', 'save_img_dir', f"epoch_{str(self.epoch)}"))
 
                 self.iter += 1
 
